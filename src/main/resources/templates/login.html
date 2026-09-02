@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: cabeca('Acesso')}"></head>
+<body>
+
+<div class="tela-login">
+    <div class="caixa-login">
+        <a class="marca">KuraVet</a>
+        <p class="legenda">Portal da clinica</p>
+
+        <p class="aviso aviso-erro" th:if="${param.error}">
+            Usuario ou senha invalidos.
+        </p>
+        <p class="aviso aviso-sucesso" th:if="${param.logout}">
+            Sessao encerrada com seguranca.
+        </p>
+
+        <form class="formulario" th:action="@{/login}" method="post">
+            <div class="campo">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" name="username" autofocus required>
+            </div>
+            <div class="campo">
+                <label for="password">Senha</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="botao botao-principal" style="width:100%">Entrar</button>
+        </form>
+
+        <p class="credenciais">
+            Acesso restrito ao perfil VETERINARIO.<br>
+            Tutores usam o aplicativo KuraVet.
+        </p>
+    </div>
+</div>
+
+</body>
+</html>

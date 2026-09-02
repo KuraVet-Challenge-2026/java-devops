@@ -1,0 +1,119 @@
+# =====================================================================
+# KuraVet - Sprint 3 - DevOps Tools & Cloud Computing
+# comandos.azcli - REFERENCIA DE LEITURA
+#
+# Este arquivo lista, na ordem, todos os comandos da Azure CLI usados
+# para provisionar a solucao. Serve para leitura, conferencia de
+# sintaxe e execucao linha a linha na extensao "Azure CLI Tools"
+# do VS Code (Ctrl + ' sobre a linha).
+#
+# ATENCAO: a extensao executa cada linha em um processo separado, e
+# por isso VARIAVEIS NAO PERSISTEM entre linhas. Os valores abaixo
+# estao escritos literalmente. Para a execucao real, prefira os
+# scripts PowerShell em infra\, que guardam a senha e o IP na sessao
+# e nao gravam segredo nenhum no repositorio.
+#
+# Substitua rm563620 pelo RM correto e <SUA_SENHA> pela senha do
+# administrador do banco. NUNCA salve a senha neste arquivo.
+# =====================================================================
+
+
+# ---------------------------------------------------------------------
+# 0. Autenticacao e contexto
+# ---------------------------------------------------------------------
+az login
+
+az account show --output table
+
+az group list --output table
+
+
+# ---------------------------------------------------------------------
+# 1. Grupo de Recursos
+# Todo recurso da Azure precisa estar associado a um Grupo de Recursos.
+# ---------------------------------------------------------------------
+az group create --name rg-kuravet-rm563620 --location brazilsouth --tags projeto=KuraVet disciplina=DevOpsCloud sprint=3
+
+az group show --name rg-kuravet-rm563620 --output table
+
+
+# ---------------------------------------------------------------------
+# 2. Plano do Servico de Aplicativo
+# Define os recursos computacionais compartilhados pelos aplicativos.
+# Camada B1 (Basico): o F1 gratuito hiberna apos 60 min de CPU.
+# --is-linux define o SO da plataforma gerenciada, nao o da sua maquina.
+# ---------------------------------------------------------------------
+az appservice plan create --name planoServico-kuravet --resource-group rg-kuravet-rm563620 --location brazilsouth --is-linux --sku B1
+
+az appservice plan show --name planoServico-kuravet --resource-group rg-kuravet-rm563620 --output table
+
+
+# ---------------------------------------------------------------------
+# 3. Servico de Aplicativo (Web App)
+# Runtime Java nativo do App Service. Sem Dockerfile, sem ACR, sem ACI.
+# O nome compoe a URL publica, por isso leva o RM (precisa ser unico).
+# ---------------------------------------------------------------------
+az webapp create --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --plan planoServico-kuravet --runtime "JAVA:21-java21"
+
+az webapp update --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --https-only true
+
+az webapp log config --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --application-logging filesystem --level information
+
+az webapp show --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --query defaultHostName --output tsv
+
+# Alternativa com plano Windows (remova --is-linux no passo 2):
+# az webapp list-runtimes --os windows
+# az webapp create --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --plan planoServico-kuravet --runtime "java:21:Java SE:21"
+
+
+# ---------------------------------------------------------------------
+# 4. Banco de Dados SQL do Azure (PaaS)
+# Servidor SQL = ponto administrativo central (login e firewall).
+# Banco individual na camada Basico do modelo DTU.
+# Nada containerizado: e servico gerenciado, criado via CLI.
+# ---------------------------------------------------------------------
+az sql server create --name servidor-sqldb-rm563620 --resource-group rg-kuravet-rm563620 --location brazilsouth --admin-user adm-sqldb-kuravet --admin-password "<SUA_SENHA>"
+
+az sql db create --name sqldb-kuravet-001 --server servidor-sqldb-rm563620 --resource-group rg-kuravet-rm563620 --service-objective Basic --backup-storage-redundancy Local
+
+# Regra 1: libera os servicos internos do Azure -> e assim que o App Service alcanca o banco
+az sql server firewall-rule create --name AllowAzureServices --server servidor-sqldb-rm563620 --resource-group rg-kuravet-rm563620 --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
+
+# Regra 2: libera o IP desta maquina -> necessario para o VS Code conectar e evidenciar o CRUD
+# Descubra seu IP em https://api.ipify.org e substitua abaixo
+az sql server firewall-rule create --name permitir-cliente-local --server servidor-sqldb-rm563620 --resource-group rg-kuravet-rm563620 --start-ip-address <SEU_IP> --end-ip-address <SEU_IP>
+
+az sql db show --name sqldb-kuravet-001 --server servidor-sqldb-rm563620 --resource-group rg-kuravet-rm563620 --output table
+
+
+# ---------------------------------------------------------------------
+# 5. Configuracoes de Aplicativo (connection string e credenciais)
+# Nenhum segredo no codigo-fonte: tudo entra como variavel de ambiente.
+# ---------------------------------------------------------------------
+az webapp config appsettings set --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --settings "SPRING_DATASOURCE_URL=jdbc:sqlserver://servidor-sqldb-rm563620.database.windows.net:1433;database=sqldb-kuravet-001;encrypt=true;trustServerCertificate=false;loginTimeout=30;" "SPRING_DATASOURCE_USERNAME=adm-sqldb-kuravet" "SPRING_DATASOURCE_PASSWORD=<SUA_SENHA>" "SPRING_PROFILES_ACTIVE=azure"
+
+# Lista apenas os NOMES das configuracoes (nao expoe valores na tela)
+az webapp config appsettings list --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --query "[].name" --output table
+
+az webapp restart --name kuravet-rm563620 --resource-group rg-kuravet-rm563620
+
+
+# ---------------------------------------------------------------------
+# 6. Deploy do artefato .jar
+# O Flyway aplica as migrations automaticamente no start da aplicacao.
+# ---------------------------------------------------------------------
+az webapp deploy --name kuravet-rm563620 --resource-group rg-kuravet-rm563620 --src-path target/kuravet-0.0.1-SNAPSHOT.jar --type jar
+
+az webapp log tail --name kuravet-rm563620 --resource-group rg-kuravet-rm563620
+
+
+# ---------------------------------------------------------------------
+# 7. Conferencia final
+# ---------------------------------------------------------------------
+az resource list --resource-group rg-kuravet-rm563620 --output table
+
+
+# ---------------------------------------------------------------------
+# 99. Limpeza - SOMENTE apos a gravacao do video e a correcao
+# ---------------------------------------------------------------------
+# az group delete --name rg-kuravet-rm563620 --yes --no-wait
