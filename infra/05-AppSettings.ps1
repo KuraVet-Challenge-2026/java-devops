@@ -9,10 +9,10 @@
 
 . "$PSScriptRoot\00-Variaveis.ps1"
 
-az webapp show -n $global:WEBAPP -g $global:RG --output none 2>$null
+Test-RecursoAz webapp,show,"-n",$global:WEBAPP,"-g",$global:RG
 Assert-ComandoOk "Web App $($global:WEBAPP) nao existe. Rode 03-WebApp.ps1 primeiro."
 
-az sql db show -g $global:RG --server $global:SQLSERVER -n $global:SQLDB --output none 2>$null
+Test-RecursoAz sql,db,show,"-g",$global:RG,"--server",$global:SQLSERVER,"-n",$global:SQLDB
 Assert-ComandoOk "Banco de dados $($global:SQLDB) nao existe. Rode 04-Database.ps1 primeiro."
 
 $senha = Get-SqlPassword

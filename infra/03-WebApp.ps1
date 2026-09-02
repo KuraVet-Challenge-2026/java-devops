@@ -6,10 +6,10 @@
 
 . "$PSScriptRoot\00-Variaveis.ps1"
 
-az appservice plan show -n $global:PLANO -g $global:RG --output none 2>$null
+Test-RecursoAz appservice,plan,show,"-n",$global:PLANO,"-g",$global:RG
 Assert-ComandoOk "App Service Plan $($global:PLANO) nao existe. Rode 02-AppServicePlan.ps1 primeiro."
 
-az webapp show -n $global:WEBAPP -g $global:RG --output none 2>$null
+Test-RecursoAz webapp,show,"-n",$global:WEBAPP,"-g",$global:RG
 if ($LASTEXITCODE -eq 0) {
     Write-Host "OK - Web App $($global:WEBAPP) ja existe. Nada a fazer." -ForegroundColor Green
 } else {

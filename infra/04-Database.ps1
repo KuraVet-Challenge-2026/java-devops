@@ -8,11 +8,11 @@
 
 . "$PSScriptRoot\00-Variaveis.ps1"
 
-az group show -n $global:RG --output none 2>$null
+Test-RecursoAz group,show,"-n",$global:RG
 Assert-ComandoOk "Resource Group $($global:RG) nao existe. Rode 01-ResourceGroup.ps1 primeiro."
 
 # --- SQL Server ---------------------------------------------------
-az sql server show -n $global:SQLSERVER -g $global:RG --output none 2>$null
+Test-RecursoAz sql,server,show,"-n",$global:SQLSERVER,"-g",$global:RG
 if ($LASTEXITCODE -eq 0) {
     Write-Host "OK - SQL Server $($global:SQLSERVER) ja existe. Nada a fazer." -ForegroundColor Green
 } else {
@@ -24,7 +24,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # --- Banco de dados -------------------------------------------------
-az sql db show -g $global:RG --server $global:SQLSERVER -n $global:SQLDB --output none 2>$null
+Test-RecursoAz sql,db,show,"-g",$global:RG,"--server",$global:SQLSERVER,"-n",$global:SQLDB
 if ($LASTEXITCODE -eq 0) {
     Write-Host "OK - Banco de dados $($global:SQLDB) ja existe. Nada a fazer." -ForegroundColor Green
 } else {
@@ -35,7 +35,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # --- Regra de firewall (servicos do Azure) --------------------------
-az sql server firewall-rule show -g $global:RG --server $global:SQLSERVER -n AllowAzureServices --output none 2>$null
+Test-RecursoAz sql,server,"firewall-rule",show,"-g",$global:RG,"--server",$global:SQLSERVER,"-n","AllowAzureServices"
 if ($LASTEXITCODE -eq 0) {
     Write-Host "OK - Regra de firewall AllowAzureServices ja existe. Nada a fazer." -ForegroundColor Green
 } else {

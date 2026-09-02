@@ -6,9 +6,6 @@
 
 . "$PSScriptRoot\00-Variaveis.ps1"
 
-az group exists -n $global:RG --output none 2>$null
-Assert-ComandoOk "Nao foi possivel verificar o Resource Group $($global:RG)."
-
 $existe = az group exists -n $global:RG
 if ($existe -ne "true") {
     Write-Host "OK - Resource Group $($global:RG) nao existe. Nada a apagar." -ForegroundColor Green

@@ -26,7 +26,7 @@ $global:AssinaturaEsperadaNome = "" # opcional, so para exibicao
 # Recursos do projeto
 # ---------------------------------------------------------------------
 $global:RG        = "rg-kuravet-rm563620"
-$global:LOCAL     = "canadacentral"
+$global:LOCAL     = "mexicocentral"
 $global:PLANO     = "plan-kuravet-rm563620"
 $global:SKU       = "B1"
 $global:WEBAPP    = "kuravet-rm563620"
@@ -72,6 +72,37 @@ function global:Get-SqlPassword {
 # impedindo que passos seguintes rodem sobre um estado invalido e
 # produzam erros derivados que escondem a causa raiz.
 # ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Test-RecursoAz
+# Checa se um recurso existe rodando "az <Argumentos> --output none".
+# Ao final, deixa $LASTEXITCODE em 0 (achou) ou nao-zero (nao achou),
+# para ser usado com Assert-ComandoOk logo em seguida - por isso NAO
+# retorna valor, so tem efeito colateral no $LASTEXITCODE.
+#
+# Por que existe (substitui "az ... --output none 2>$null" usado antes
+# direto nos scripts):
+#   1) No Windows PowerShell 5.1, redirecionar o stderr de um
+#      executavel nativo com "2>" pode alterar $LASTEXITCODE mesmo
+#      quando o comando teve sucesso - um bug conhecido do PowerShell
+#      com wrappers .cmd como o az. "2>&1 | Out-Null" nao tem esse
+#      problema e continua suprimindo a mensagem de erro do az no
+#      console.
+#   2) Um recurso recem-criado pode nao aparecer imediatamente em
+#      consultas seguintes (consistencia eventual do Azure Resource
+#      Manager). Por isso tenta ate 3x com pausa antes de considerar
+#      que o recurso realmente nao existe.
+# ---------------------------------------------------------------------
+function global:Test-RecursoAz {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Argumentos
+    )
+    for ($tentativa = 1; $tentativa -le 3; $tentativa++) {
+        az @Argumentos --output none 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { return }
+        if ($tentativa -lt 3) { Start-Sleep -Seconds 3 }
+    }
+}
+
 function global:Assert-ComandoOk {
     param(
         [Parameter(Mandatory = $true)][string]$Mensagem

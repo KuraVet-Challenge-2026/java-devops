@@ -6,10 +6,10 @@
 
 . "$PSScriptRoot\00-Variaveis.ps1"
 
-az group show -n $global:RG --output none 2>$null
+Test-RecursoAz group,show,"-n",$global:RG
 Assert-ComandoOk "Resource Group $($global:RG) nao existe. Rode 01-ResourceGroup.ps1 primeiro."
 
-az appservice plan show -n $global:PLANO -g $global:RG --output none 2>$null
+Test-RecursoAz appservice,plan,show,"-n",$global:PLANO,"-g",$global:RG
 if ($LASTEXITCODE -eq 0) {
     Write-Host "OK - App Service Plan $($global:PLANO) ja existe. Nada a fazer." -ForegroundColor Green
 } else {

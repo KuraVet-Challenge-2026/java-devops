@@ -6,7 +6,7 @@
 
 . "$PSScriptRoot\00-Variaveis.ps1"
 
-az webapp show -n $global:WEBAPP -g $global:RG --output none 2>$null
+Test-RecursoAz webapp,show,"-n",$global:WEBAPP,"-g",$global:RG
 Assert-ComandoOk "Web App $($global:WEBAPP) nao existe. Rode 03-WebApp.ps1 primeiro."
 
 Write-Host ">>> Empacotando aplicacao (mvnw clean package)..." -ForegroundColor Cyan
