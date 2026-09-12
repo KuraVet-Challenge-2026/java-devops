@@ -1,46 +1,9 @@
-# =====================================================================
-# 04-Database.ps1
-# Cria o SQL Server, o banco de dados e a regra de firewall para
-# servicos do Azure. Idempotente: cada recurso e checado antes de
-# criar. A senha do admin nunca fica neste arquivo - veja
-# Get-SqlPassword em 00-Variaveis.ps1.
-# =====================================================================
+# Cria o SQL Server, o banco de dados e libera o acesso dos servicos do Azure.
+az sql server create -n $SQLSERVER -g $RG -l $LOCAL --admin-user $SQLUSER --admin-password $SQLPASS
 
-. "$PSScriptRoot\00-Variaveis.ps1"
+az sql db create -g $RG --server $SQLSERVER -n $SQLDB --service-objective Basic
 
-Test-RecursoAz group,show,"-n",$global:RG
-Assert-ComandoOk "Resource Group $($global:RG) nao existe. Rode 01-ResourceGroup.ps1 primeiro."
+az sql server firewall-rule create -g $RG --server $SQLSERVER -n AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
 
-# --- SQL Server ---------------------------------------------------
-Test-RecursoAz sql,server,show,"-n",$global:SQLSERVER,"-g",$global:RG
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "OK - SQL Server $($global:SQLSERVER) ja existe. Nada a fazer." -ForegroundColor Green
-} else {
-    $senha = Get-SqlPassword
-    Write-Host ">>> Criando SQL Server $($global:SQLSERVER) em $($global:LOCAL)..." -ForegroundColor Cyan
-    az sql server create -n $global:SQLSERVER -g $global:RG -l $global:LOCAL --admin-user $global:SQLUSER --admin-password $senha --output none
-    Assert-ComandoOk "Falha ao criar o SQL Server $($global:SQLSERVER). Rode .\00-Preflight.ps1 para checar a regiao (RegionDoesNotAllowProvisioning)."
-    Write-Host "OK - SQL Server $($global:SQLSERVER) criado." -ForegroundColor Green
-}
-
-# --- Banco de dados -------------------------------------------------
-Test-RecursoAz sql,db,show,"-g",$global:RG,"--server",$global:SQLSERVER,"-n",$global:SQLDB
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "OK - Banco de dados $($global:SQLDB) ja existe. Nada a fazer." -ForegroundColor Green
-} else {
-    Write-Host ">>> Criando banco de dados $($global:SQLDB)..." -ForegroundColor Cyan
-    az sql db create -g $global:RG --server $global:SQLSERVER -n $global:SQLDB --service-objective Basic --output none
-    Assert-ComandoOk "Falha ao criar o banco de dados $($global:SQLDB)."
-    Write-Host "OK - Banco de dados $($global:SQLDB) criado." -ForegroundColor Green
-}
-
-# --- Regra de firewall (servicos do Azure) --------------------------
-Test-RecursoAz sql,server,"firewall-rule",show,"-g",$global:RG,"--server",$global:SQLSERVER,"-n","AllowAzureServices"
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "OK - Regra de firewall AllowAzureServices ja existe. Nada a fazer." -ForegroundColor Green
-} else {
-    Write-Host ">>> Criando regra de firewall AllowAzureServices..." -ForegroundColor Cyan
-    az sql server firewall-rule create -g $global:RG --server $global:SQLSERVER -n AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none
-    Assert-ComandoOk "Falha ao criar a regra de firewall AllowAzureServices."
-    Write-Host "OK - Regra de firewall AllowAzureServices criada." -ForegroundColor Green
-}
+$meuIp = (Invoke-RestMethod "https://api.ipify.org?format=json").ip
+az sql server firewall-rule create -g $RG --server $SQLSERVER -n permitir-cliente-local --start-ip-address $meuIp --end-ip-address $meuIp
