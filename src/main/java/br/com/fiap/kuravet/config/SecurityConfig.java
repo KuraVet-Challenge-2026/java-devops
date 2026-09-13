@@ -13,22 +13,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
-/**
- * Configuracao de seguranca hibrida do KuraVet.
- *
- * <p>Duas cadeias de filtros isoladas:
- * <ul>
- *     <li>{@code /api/**} - consumida pelo app mobile (React Native). Sem CSRF,
- *         sem sessao HTTP, autenticada via HTTP Basic contra a tabela USUARIO
- *         ({@code br.com.fiap.kuravet.security.UsuarioDetailsService}).</li>
- *     <li>demais rotas (portal web) - protegidas por formLogin() tradicional do
- *         Spring Security; {@code /portal/**} exige perfil VETERINARIO.</li>
- * </ul>
- *
- * <p>Aqui ficam apenas as regras que dependem de rota e metodo HTTP. A
- * autorizacao por dono (um TUTOR so ve e altera os proprios pets e consultas)
- * depende dos dados e por isso vive na camada de service.
- */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {

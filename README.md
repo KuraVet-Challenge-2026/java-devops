@@ -1,391 +1,231 @@
-# 🐾 KuraVet
+# KuraVet — Sprint 3 · DevOps Tools & Cloud Computing
 
-Backend da plataforma de teleconsulta veterinária **KuraVet**, desenvolvido em **Spring Boot** para o Challenge FIAP.
+Solução 100% PaaS na Azure: aplicação Spring Boot publicada em **Azure App Service (Linux)** conectada a um **Banco de Dados SQL do Azure**. Toda a infraestrutura é provisionada por Azure CLI. Nenhum recurso é containerizado e nenhum recurso é criado pelo portal.
 
-A aplicação atende dois públicos a partir do mesmo núcleo de regras de negócio:
+**Vídeo demonstrativo:** https://youtu.be/ApngMisZKyU
 
-- **Portal web da clínica** (`/portal/**`) — camada de visualização em **Thymeleaf**, restrita ao perfil `VETERINARIO`. É onde o veterinário aprova ou recusa solicitações de teleconsulta, emite diagnósticos e gerencia o cadastro de pets.
-- **API REST** (`/api/**`) — consumida pelo aplicativo mobile do tutor (React Native), autenticada via HTTP Basic. Um `TUTOR` só enxerga e altera os próprios pets e consultas.
-  Nenhuma regra de negócio é duplicada entre os dois canais: ambos chamam os mesmos *services*.
+**Repositório:** `COLE_O_LINK_DO_GITHUB`
 
 ---
 
-## Sumário
+## 1. Descrição da solução
 
-- [Stack utilizada](#stack-utilizada)
-- [Fluxos de negócio](#fluxos-de-negócio)
-- [Pré-requisitos](#pré-requisitos)
-- [Configuração](#configuração)
-- [Instalação e execução](#instalação-e-execução)
-- [Migrações do banco (Flyway)](#migrações-do-banco-flyway)
-- [Segurança e perfis de acesso](#segurança-e-perfis-de-acesso)
-- [Portal web](#portal-web)
-- [API REST](#api-rest)
-- [Tratamento de erros](#tratamento-de-erros)
-- [Estrutura do projeto](#estrutura-do-projeto)
-- [Problemas comuns](#problemas-comuns)
----
+O KuraVet é uma plataforma de gestão da jornada contínua de saúde do pet. Esta entrega expõe a aplicação web e a API REST que sustentam o núcleo do produto: o cadastro longitudinal do animal e o ciclo completo de teleconsulta.
 
-## Stack utilizada
+A aplicação gerencia duas entidades relacionadas do core de saúde veterinária:
 
-| Camada         | Tecnologia                                        |
-|----------------|---------------------------------------------------|
-| Linguagem      | Java 21                                           |
-| Framework      | Spring Boot 4.1.0                                 |
-| Visualização   | Thymeleaf + thymeleaf-extras-springsecurity6      |
-| Persistência   | Spring Data JPA + Hibernate                       |
-| Banco de dados | Oracle Database (driver `ojdbc11`)                |
-| Migrações      | Flyway (`flyway-database-oracle`)                 |
-| Segurança      | Spring Security (form login + HTTP Basic stateless) |
-| Validação      | Jakarta Bean Validation                           |
-| Build          | Maven (via Maven Wrapper)                         |
-| Utilitários    | Lombok                                            |
- 
----
+- **Pet** — perfil do animal (nome, espécie, raça, data de nascimento, sexo) e seu vínculo com o tutor responsável.
+- **Consulta** — cada teleconsulta solicitada, com veterinário, data, tipo, status, diagnóstico e motivo de recusa.
 
-## Fluxos de negócio
+O relacionamento é 1:N — um pet possui muitas consultas, e toda consulta pertence obrigatoriamente a um pet. Sobre essas duas tabelas a solução implementa CRUD completo, acessível tanto pelo portal web (Thymeleaf) quanto pela API REST.
 
-A aplicação implementa dois fluxos funcionais completos, além do CRUD de apoio. Ambos vivem em `ConsultaService`, que é o **único ponto do sistema autorizado a alterar o status de uma consulta**.
+A consulta percorre uma máquina de estados real: o tutor solicita pelo aplicativo, o pedido chega como `SOLICITADA`, o veterinário aprova (`AGENDADA`) ou recusa (`RECUSADA`, com motivo obrigatório), e após o atendimento é encerrada como `REALIZADA` com diagnóstico.
 
-### Máquina de estados da consulta
+## 2. Benefícios para o negócio
 
-```
-SOLICITADA ──aprovar──▶ AGENDADA ──diagnóstico──▶ REALIZADA
-     │                      │
-   recusar               cancelar
-     ▼                      ▼
-  RECUSADA              CANCELADA
-```
+O mercado veterinário brasileiro opera de forma episódica: o tutor procura a clínica em emergências ou quando a vacina obrigatória vence. O vínculo é fraco, o histórico é fragmentado e o Lifetime Value por animal fica abaixo do potencial.
 
-`REALIZADA`, `RECUSADA` e `CANCELADA` são estados terminais. Qualquer transição fora deste mapa é rejeitada com `400 Bad Request` e a mensagem `Transicao de status invalida: X -> Y`.
+A solução ataca o problema em quatro frentes:
 
-### Fluxo 1 — Aprovação de teleconsulta
+- **Histórico longitudinal estruturado.** Atendimentos deixam de existir soltos em prontuários de papel e passam a formar uma linha do tempo consultável, disponível ao tutor no aplicativo e ao veterinário no painel.
+- **Triagem organizada.** O campo de status ordena a fila de teleconsulta e dá visibilidade de quantos pedidos aguardam decisão, reduzindo o tempo ocioso do profissional.
+- **Integridade garantida no banco.** Constraints asseguram que o motivo de recusa só existe quando a consulta é recusada, e que o diagnóstico só existe quando ela foi realizada. A regra não depende da aplicação.
+- **Custo operacional previsível.** A escolha por PaaS elimina gestão de servidores, patching de sistema operacional e manutenção de imagens. A clínica parceira não precisa de equipe de infraestrutura, e a Azure entrega backup automático sem esforço adicional.
 
-1. O tutor solicita a teleconsulta pelo app (`POST /api/consultas/solicitacoes`). A consulta nasce como `SOLICITADA`.
-2. Regras aplicadas na solicitação: o pet precisa pertencer ao tutor autenticado, o veterinário precisa existir, a data precisa ser futura, e o pet não pode ter outra consulta ativa na mesma data.
-3. O veterinário vê o pedido na fila do portal (`/portal/solicitacoes`) e decide:
-    - **Aprovar** → `AGENDADA`;
-    - **Recusar** → `RECUSADA`, com justificativa obrigatória entre 10 e 300 caracteres, visível ao tutor.
-### Fluxo 2 — Realização e emissão de diagnóstico
+## 3. Arquitetura
 
-O veterinário abre uma consulta `AGENDADA` no portal e registra o diagnóstico (entre 15 e 400 caracteres). A consulta passa a `REALIZADA` e não pode mais ser alterada. Uma consulta ainda `SOLICITADA` ou já `RECUSADA` nunca vira atendimento.
+![Arquitetura da solução](docs/arquitetura.png)
 
-### Regras espelhadas no schema
+O tutor acessa a aplicação por HTTPS na porta 443. O App Service executa o jar Spring Boot sobre o runtime Java 21 gerenciado pela plataforma — sem imagem de container em nenhum ponto do fluxo. A aplicação lê a connection string das variáveis de ambiente e abre conexão TLS na porta 1433 com o Banco de Dados SQL, que vive no mesmo Grupo de Recursos e na mesma região.
 
-As regras não vivem apenas no Java. O banco garante as mesmas invariantes por *CHECK constraints*, de modo que nem um `INSERT` manual pelo SQL Developer consegue violá-las:
+| Camada | Recurso | Nome | Configuração |
+|---|---|---|---|
+| Agrupamento | Grupo de Recursos | `rg-kuravet-rm562396` | Mexico Central |
+| Computação | Plano do Serviço de Aplicativo | `plan-kuravet-rm562396` | Linux, B1 |
+| Aplicação | Serviço de Aplicativo | `kuravet-rm562396` | Java 21, HTTPS |
+| Dados | Servidor SQL | `sqlserver-kuravet-rm562396` | Login e firewall |
+| Dados | Banco de Dados SQL | `bd_kuravet` | Básico (DTU) |
 
-| Constraint | Garante |
-|---|---|
-| `KV_CK_CONS_STATUS` | status ∈ {SOLICITADA, AGENDADA, REALIZADA, CANCELADA, RECUSADA} |
-| `KV_CK_CONS_DIAGNOSTICO` | diagnóstico existe **se e somente se** o status é `REALIZADA` |
-| `KV_CK_CONS_MOTIVO` | motivo de recusa existe **se e somente se** o status é `RECUSADA` |
-| `KV_CK_USU_PERFIL` | perfil ∈ {TUTOR, VETERINARIO} |
-| `KV_CK_USU_TUTOR` | `ID_TUTOR` é obrigatório quando o perfil é TUTOR e proibido quando é VETERINARIO |
-| `KV_CK_PET_SEXO` | sexo ∈ {M, F} |
- 
----
+## 4. Tecnologias
 
-## Pré-requisitos
+Java 21 · Spring Boot · Spring Security · Spring Data JPA · Flyway · Thymeleaf · Maven · Azure App Service · Azure SQL Database · Azure CLI · PowerShell
 
-- **JDK 21** ou superior no `PATH` (`java -version`).
-- Maven **não** precisa ser instalado — o projeto inclui o Maven Wrapper (`mvnw` / `mvnw.cmd`).
-- Acesso de rede ao Oracle da instituição (`oracle.fiap.com.br:1521`), incluindo VPN quando exigido.
-- Credenciais de um schema Oracle válido.
----
+## 5. Pré-requisitos
 
-## Configuração
+| Ferramenta | Versão mínima | Verificação |
+|---|---|---|
+| Azure CLI | 2.60 | `az version` |
+| Java (JDK) | 21 | `java -version` |
+| Git | 2.40 | `git --version` |
 
-As credenciais **não são versionadas**. O arquivo `src/main/resources/application.properties` traz apenas placeholders e importa, se existir, um arquivo local fora do controle de versão:
+## 6. Passo a passo de deploy
 
-```properties
-spring.config.import=optional:classpath:application-local.properties
- 
-spring.datasource.url=${DB_URL:jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL}
-spring.datasource.username=${DB_USERNAME:}
-spring.datasource.password=${DB_PASSWORD:}
-```
+Todos os comandos são executados no terminal. Nenhuma etapa usa o portal da Azure.
 
-Crie `src/main/resources/application-local.properties` com as suas credenciais:
+### 6.1 Clonar o repositório
 
-```properties
-spring.datasource.username=SEU_RM
-spring.datasource.password=SUA_SENHA
-```
-
-Esse arquivo está no `.gitignore` e nunca vai para o repositório.
-
-Alternativamente, defina as variáveis de ambiente `DB_USERNAME` e `DB_PASSWORD`, ou passe por linha de comando:
-
-```bash
-./mvnw spring-boot:run -Dspring-boot.run.arguments="--spring.datasource.username=SEU_RM --spring.datasource.password=SUA_SENHA"
-```
-
-> ⚠️ O `application.properties` deve estar salvo em **UTF-8**. Em outra codificação, o Maven falha ao copiar o arquivo para `target/classes` (`MalformedInputException`) e a aplicação sobe com as propriedades vazias.
- 
----
-
-## Instalação e execução
-
-```bash
-git clone https://github.com/KuraVet-Challenge-2026/java-advanced.git
-cd java-advanced/kuravet
-```
-
-### Linha de comando
-
-**Windows (PowerShell):**
 ```powershell
-.\mvnw.cmd clean spring-boot:run
+git clone COLE_O_LINK_DO_GITHUB
+cd java-devops
 ```
 
-**Linux / macOS:**
-```bash
-./mvnw clean spring-boot:run
+### 6.2 Autenticar na Azure
+
+```powershell
+az login
+az account show --output table
 ```
 
-### Pela IDE
+### 6.3 Carregar as variáveis
 
-Abra a pasta **`kuravet`** (a que contém o `pom.xml`) como projeto Maven — não a pasta raiz do repositório. Configure as credenciais e execute `br.com.fiap.kuravet.KuravetApplication`.
+O ponto seguido de espaço é obrigatório: ele carrega as variáveis na sessão atual do PowerShell.
 
-Ao subir com sucesso:
-
-```
-Successfully applied N migrations
-Tomcat initialized with port 8080 (http)
-Started KuravetApplication in X seconds
+```powershell
+. .\infra\00-Variaveis.ps1
 ```
 
-A aplicação fica em **http://localhost:8080**.
- 
----
+A senha do administrador do banco é digitada neste momento, de forma mascarada, e não fica gravada em nenhum arquivo do repositório.
 
-## Migrações do banco (Flyway)
+### 6.4 Provisionar a infraestrutura
 
-O schema é criado e versionado automaticamente na inicialização, a partir de `src/main/resources/db/migration/`:
+Execute na ordem:
 
-| Script | Conteúdo |
-|---|---|
-| `V1__schema.sql` | DDL das tabelas TUTOR, VETERINARIO, PET, CONSULTA, USUARIO, sequences e constraints |
-| `V2__seed_perfis_e_veterinario.sql` | 10 veterinários e o usuário de perfil VETERINARIO |
-| `V3__seed_tutor_inicial.sql` | Tutor inicial e seu usuário de perfil TUTOR |
-| `V4__consulta_teleconsulta.sql` | Amplia a máquina de estados: status `SOLICITADA` e `RECUSADA`, colunas `DATA_SOLICITACAO` e `MOTIVO_RECUSA`, novas CHECK constraints |
-| `V5__seed_pets_e_consultas.sql` | Pets e consultas cobrindo todos os estados do fluxo |
+```powershell
+.\infra\01-ResourceGroup.ps1    # Grupo de Recursos
+.\infra\02-AppServicePlan.ps1   # Plano do Serviço de Aplicativo (Linux B1)
+.\infra\03-WebApp.ps1           # Web App com runtime Java 21
+.\infra\04-Database.ps1         # Servidor SQL, banco e regras de firewall
+.\infra\05-AppSettings.ps1      # Connection string como variável de ambiente
+.\infra\06-Deploy.ps1           # Build Maven e publicação do jar
+```
 
-Nenhum script precisa ser executado à mão: basta iniciar a aplicação apontando para um schema Oracle válido.
+### 6.5 Validar
 
-O Hibernate roda com `spring.jpa.hibernate.ddl-auto=validate` — o schema é propriedade do Flyway, e o Hibernate apenas confere se as entidades batem com o que foi criado.
+```powershell
+$url = "https://kuravet-rm562396.azurewebsites.net"
+curl.exe -i "$url/actuator/health"
+curl.exe -u tutor:tutor123 "$url/api/pets"
+```
 
-### Regra de ouro
+O portal web fica disponível em `$url`, com login `veterinario` / `vet123`.
 
-**Nunca edite uma migration já aplicada.** O Flyway compara o checksum do arquivo com o que foi executado e se recusa a continuar se houver diferença. Precisa mudar algo? Crie um `V6__`, `V7__` e assim por diante.
+### 6.6 Encerrar (somente após a correção)
 
-A aplicação registra um `FlywayMigrationStrategy` que executa `repair()` antes de `migrate()`, de modo que um registro de migration interrompida não impede a inicialização seguinte.
+```powershell
+az group delete -n rg-kuravet-rm562396 --yes
+```
 
-### Script SQL independente
-
-O arquivo `script_bd.sql`, na raiz do módulo, contém procedures, functions e a trigger de auditoria da disciplina de banco de dados. Ele é executado manualmente em um cliente Oracle e **não** faz parte do schema gerenciado pelo Flyway.
- 
----
-
-## Segurança e perfis de acesso
-
-Duas cadeias de filtros isoladas, declaradas em `SecurityConfig`:
-
-| Cadeia | Rotas | Autenticação | Sessão | CSRF |
-|---|---|---|---|---|
-| API mobile | `/api/**` | HTTP Basic | Stateless | Desabilitado |
-| Portal web | demais rotas | Form login | Sessão HTTP | Habilitado |
-
-A autenticação consulta a tabela `USUARIO` através de `UsuarioDetailsService`, com senhas em **BCrypt**. A autorização por rota e método fica no `SecurityConfig`; a autorização **por dono** — um tutor só acessa os próprios registros — depende dos dados e por isso vive na camada de service.
-
-Um pet ou consulta de outro tutor retorna `404`, não `403`, para não revelar a existência de registros de terceiros.
-
-### Usuários de teste
+## 7. Usuários de demonstração
 
 | Usuário | Senha | Perfil | Acesso |
 |---|---|---|---|
-| `veterinario` | `vet123` | VETERINARIO | Portal web e API |
-| `tutor` | `tutor123` | TUTOR | Apenas API (app mobile) |
- 
----
+| `tutor` | `tutor123` | TUTOR | API REST de pets e consultas |
+| `veterinario` | `vet123` | VETERINARIO | Portal web em `/portal/painel` |
 
-## Portal web
+## 8. Endpoints da API
 
-Interface Thymeleaf da clínica. Todas as rotas sob `/portal/**` exigem perfil `VETERINARIO`.
+### Pet
 
-| Rota | Descrição |
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/pets` | Cadastra um novo pet |
+| `GET` | `/api/pets` | Lista os pets do tutor |
+| `GET` | `/api/pets/{id}` | Consulta um pet específico |
+| `PUT` | `/api/pets/{id}` | Atualiza os dados do pet |
+| `DELETE` | `/api/pets/{id}` | Remove o pet |
+
+### Consulta
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/consultas/solicitacoes` | Solicita uma teleconsulta |
+| `GET` | `/api/consultas` | Lista as consultas |
+| `PUT` | `/api/consultas/{id}` | Atualiza a consulta |
+| `DELETE` | `/api/consultas/{id}` | Remove a consulta |
+
+### Exemplos de uso
+
+```powershell
+$url = "https://kuravet-rm562396.azurewebsites.net"
+
+# CREATE - pet
+'{"nome":"Amora","especie":"Gato","raca":"Persa","dataNascimento":"2022-04-18","sexo":"F"}' | Out-File -Encoding ascii pet.json
+curl.exe -u tutor:tutor123 -X POST "$url/api/pets" -H "Content-Type: application/json" -d "@pet.json"
+
+# CREATE - consulta relacionada ao pet
+'{"idPet":1,"idVeterinario":1,"dataConsulta":"2026-10-15","tipoConsulta":"Teleconsulta - Dermatologia"}' | Out-File -Encoding ascii consulta.json
+curl.exe -u tutor:tutor123 -X POST "$url/api/consultas/solicitacoes" -H "Content-Type: application/json" -d "@consulta.json"
+
+# READ
+curl.exe -u tutor:tutor123 "$url/api/pets"
+
+# DELETE
+curl.exe -u tutor:tutor123 -i -X DELETE "$url/api/pets/11"
+```
+
+## 9. Banco de dados
+
+O DDL completo, com comentários em todas as tabelas e colunas, chaves primárias e estrangeiras, constraints de validação e carga inicial está em [`script_bd.sql`](script_bd.sql).
+
+O mesmo conteúdo é aplicado automaticamente pelo **Flyway** no start da aplicação, a partir de `src/main/resources/db/migration/sqlserver`.
+
+Conexão para verificação manual:
+
+```
+Servidor:  sqlserver-kuravet-rm562396.database.windows.net
+Porta:     1433
+Banco:     bd_kuravet
+Usuário:   kuravetadmin
+Encrypt:   Mandatory
+```
+
+Consulta para conferir os comentários gravados no DDL:
+
+```sql
+SELECT t.name AS TABELA, c.name AS COLUNA, ep.value AS COMENTARIO
+FROM sys.extended_properties ep
+JOIN sys.tables t ON t.object_id = ep.major_id
+LEFT JOIN sys.columns c ON c.object_id = ep.major_id AND c.column_id = ep.minor_id
+WHERE ep.name = 'MS_Description'
+ORDER BY t.name, c.column_id;
+```
+
+## 10. Segurança
+
+- Nenhuma credencial existe no código-fonte. A connection string, o usuário e a senha são injetados exclusivamente por `az webapp config appsettings set` e lidos pelo Spring como variáveis de ambiente.
+- O `application-azure.properties` versionado contém apenas placeholders resolvidos em runtime.
+- A conexão com o banco exige `encrypt=true`.
+- O firewall do servidor SQL libera apenas os serviços do Azure e o IP do operador.
+- Autenticação e autorização por perfil via Spring Security: o tutor não acessa o painel da clínica, e o veterinário não cria pets.
+- O `.gitignore` bloqueia `.env`, chaves, `target/` e arquivos de configuração local.
+
+## 11. Estrutura do repositório
+
+```
+.
+├── README.md
+├── script_bd.sql
+├── docs/
+│   └── arquitetura.png
+├── infra/
+│   ├── 00-Variaveis.ps1
+│   ├── 01-ResourceGroup.ps1
+│   ├── 02-AppServicePlan.ps1
+│   ├── 03-WebApp.ps1
+│   ├── 04-Database.ps1
+│   ├── 05-AppSettings.ps1
+│   └── 06-Deploy.ps1
+└── src/                     (aplicação Spring Boot)
+```
+
+## 12. Integrantes
+
+| Nome completo | RM |
 |---|---|
-| `GET /login` | Tela de login (pública) |
-| `GET /portal/painel` | Indicadores por status e resumo do fluxo |
-| `GET /portal/solicitacoes` | Fila de teleconsultas aguardando decisão |
-| `POST /portal/solicitacoes/{id}/aprovar` | Aprova a solicitação |
-| `GET/POST /portal/solicitacoes/{id}/recusar` | Formulário e gravação da recusa |
-| `GET /portal/consultas` | Histórico completo, filtrável por status |
-| `GET /portal/consultas/{id}` | Detalhe da consulta |
-| `POST /portal/consultas/{id}/diagnostico` | Emite o diagnóstico e encerra |
-| `GET /portal/pets` | Lista de pets |
-| `GET/POST /portal/pets/novo` | Cadastro de pet |
-| `GET/POST /portal/pets/{id}/editar` | Edição de pet |
-| `POST /portal/pets/{id}/excluir` | Exclusão de pet |
+| GUILHERME MACEDO | RM562396 |
+| PEDRO HENRIQUE | RM563405 |
+| HENRIQUE MARTINS | RM563620 |
 
-Os formulários usam `@Valid` com `BindingResult`: quando a validação falha, a página é reexibida com a mensagem sob o campo e o restante do formulário preenchido. O token CSRF é injetado automaticamente pelo Thymeleaf em todo `<form th:action>` com `method="post"`.
- 
 ---
 
-## API REST
-
-Base: `http://localhost:8080/api`. Todas as rotas exigem HTTP Basic, exceto `/api/ping`.
-
-| Método | Rota | Perfil | Descrição |
-|---|---|---|---|
-| `GET` | `/api/ping` | público | Health-check (retorna `pong`) |
-| `GET` | `/api/pets` | autenticado | Lista pets (TUTOR: só os próprios) |
-| `GET` | `/api/pets/{id}` | autenticado | Busca pet por ID |
-| `POST` | `/api/pets` | TUTOR | Cadastra pet para o tutor autenticado |
-| `PUT` | `/api/pets/{id}` | TUTOR | Atualiza pet próprio |
-| `DELETE` | `/api/pets/{id}` | TUTOR | Exclui pet próprio (bloqueado se houver consultas) |
-| `GET` | `/api/tutores`, `/api/tutores/{id}` | autenticado | Lista e busca tutores |
-| `POST`/`PUT`/`DELETE` | `/api/tutores/**` | autenticado | CRUD de tutores |
-| `GET` | `/api/consultas?status=` | autenticado | Lista consultas, opcionalmente por status |
-| `GET` | `/api/consultas/{id}` | autenticado | Busca consulta por ID |
-| `POST` | `/api/consultas/solicitacoes` | TUTOR | Solicita teleconsulta |
-| `PATCH` | `/api/consultas/{id}/aprovacao` | VETERINARIO | Aprova a solicitação |
-| `PATCH` | `/api/consultas/{id}/recusa` | VETERINARIO | Recusa com justificativa |
-| `PATCH` | `/api/consultas/{id}/diagnostico` | VETERINARIO | Emite diagnóstico e encerra |
-| `PATCH` | `/api/consultas/{id}/cancelamento` | autenticado | Cancela consulta agendada |
-| `PUT` | `/api/consultas/{id}` | autenticado | Atualiza pet, veterinário, data ou tipo |
-| `DELETE` | `/api/consultas/{id}` | autenticado | Exclui consulta |
-
-### Exemplo — solicitar teleconsulta
-
-```http
-POST /api/consultas/solicitacoes
-Authorization: Basic dHV0b3I6dHV0b3IxMjM=
-Content-Type: application/json
- 
-{
-  "idPet": 1,
-  "idVeterinario": 2,
-  "dataConsulta": "2026-10-01",
-  "tipoConsulta": "Teleconsulta - Dermatologia"
-}
-```
-
-Resposta `201 Created`:
-
-```json
-{
-  "idConsulta": 12,
-  "idPet": 1,
-  "nomePet": "Thor",
-  "idVeterinario": 2,
-  "nomeVeterinario": "Dr. Rafael Andrade",
-  "dataSolicitacao": "2026-08-27",
-  "dataConsulta": "2026-10-01",
-  "tipoConsulta": "Teleconsulta - Dermatologia",
-  "diagnostico": null,
-  "motivoRecusa": null,
-  "status": "SOLICITADA"
-}
-```
-
-### Exemplo — recusar solicitação
-
-```http
-PATCH /api/consultas/12/recusa
-Authorization: Basic dmV0ZXJpbmFyaW86dmV0MTIz
-Content-Type: application/json
- 
-{
-  "motivo": "Caso ortopedico exige exame presencial com raio-x."
-}
-```
- 
----
-
-## Tratamento de erros
-
-Há dois `ControllerAdvice` com escopos distintos, para que cada canal receba a resposta no formato certo:
-
-- `ApiExceptionHandler` (`@RestControllerAdvice` limitado ao pacote `controller.api`) → JSON padronizado;
-- `PortalExceptionHandler` (`@ControllerAdvice` limitado a `controller.web`) → página HTML de erro.
-  Erro de negócio ou recurso inexistente na API:
-
-```json
-{
-  "timestamp": "2026-08-27T21:10:00",
-  "status": 404,
-  "erro": "Not Found",
-  "mensagem": "Pet com ID 999 não encontrado."
-}
-```
-
-Erro de validação inclui o detalhe por campo:
-
-```json
-{
-  "timestamp": "2026-08-27T21:10:00",
-  "status": 400,
-  "erro": "Bad Request",
-  "mensagem": "Erro de validação nos campos informados.",
-  "campos": {
-    "dataConsulta": "A data desejada precisa ser futura."
-  }
-}
-```
- 
----
-
-## Estrutura do projeto
-
-```
-kuravet/
-├── pom.xml
-├── script_bd.sql                    # Script SQL manual (disciplina de banco)
-└── src/main/
-    ├── java/br/com/fiap/kuravet/
-    │   ├── KuravetApplication.java
-    │   ├── config/                  # SecurityConfig, CorsConfig, FlywayConfig
-    │   ├── controller/
-    │   │   ├── api/                 # Endpoints REST do app mobile
-    │   │   └── web/                 # Controllers do portal Thymeleaf
-    │   │       └── form/            # Objetos de vínculo dos formulários
-    │   ├── dto/                     # Records de entrada e saída da API
-    │   ├── enums/                   # Perfil, StatusConsulta
-    │   ├── exception/               # Exceções de negócio
-    │   │   └── handler/             # Tratamento global por canal
-    │   ├── model/                   # Entidades JPA
-    │   ├── repository/              # Spring Data JPA
-    │   ├── security/                # UsuarioPrincipal, UsuarioDetailsService
-    │   └── service/                 # Regras de negócio
-    └── resources/
-        ├── application.properties
-        ├── db/migration/            # Scripts versionados do Flyway
-        ├── static/css/              # Folha de estilo do portal
-        └── templates/               # Views Thymeleaf
-```
- 
----
-
-## Problemas comuns
-
-**`ORA-12541: não há listener em host localhost port 1521`**
-A URL do datasource não foi carregada e caiu no padrão. Confirme que o `application-local.properties` existe e que o `application.properties` está em UTF-8.
-
-**`ORA-01017: invalid username/password`**
-Credenciais incorretas em `application-local.properties`.
-
-**`Migration checksum mismatch`**
-Uma migration já aplicada foi editada. Reverta o arquivo ou crie uma nova versão — nunca altere uma migration aplicada.
-
-**`Detected failed migration to version N`**
-Uma migration falhou pela metade e o registro ficou no histórico. O `FlywayConfig` resolve automaticamente na próxima inicialização; se persistir, remova a linha correspondente de `FLYWAY_SCHEMA_HISTORY` (atenção: as colunas dessa tabela são minúsculas e exigem aspas duplas no Oracle, ex. `WHERE "version" = 'N'`).
-
-**`Found non-empty schema(s) but no schema history table`**
-O schema tem tabelas criadas fora do Flyway. Mantenha `spring.flyway.baseline-on-migrate=true` ou limpe o schema antes da primeira execução.
-
-**Timeout ao conectar em `oracle.fiap.com.br`**
-Verifique a conexão com a rede/VPN da FIAP.
-
-**A IDE não reconhece o projeto / botão de execução ausente**
-Abra a pasta `kuravet` (a que contém o `pom.xml`), não a raiz do repositório.
+> Esta entrega usa exclusivamente a **Opção 2 — Serviço de Aplicativo + Banco PaaS**. Não há Dockerfile, docker-compose, ACR ou ACI neste repositório.

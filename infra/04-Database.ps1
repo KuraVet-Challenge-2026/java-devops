@@ -1,4 +1,3 @@
-# Cria o SQL Server, o banco de dados e libera o acesso dos servicos do Azure.
 az sql server create -n $SQLSERVER -g $RG -l $LOCAL --admin-user $SQLUSER --admin-password $SQLPASS
 
 az sql db create -g $RG --server $SQLSERVER -n $SQLDB --service-objective Basic

@@ -21,12 +21,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
 
-/**
- * Portal web da clinica (Thymeleaf), restrito ao perfil VETERINARIO pelo
- * {@code SecurityConfig}. Expoe pela interface os mesmos dois fluxos de
- * negocio da API mobile, reaproveitando o {@link ConsultaService}: nenhuma
- * regra e reimplementada aqui.
- */
 @Controller
 public class PortalWebController {
 

@@ -18,11 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.util.List;
 
-/**
- * CRUD de TUTOR consumido pelo app mobile (React Native). Trafega apenas
- * DTOs ({@link TutorRequestDTO}/{@link TutorResponseDTO}) para nao expor a
- * entidade JPA {@link Tutor} diretamente ao cliente.
- */
 @RestController
 @RequestMapping("/api/tutores")
 public class TutorController {

@@ -25,11 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.util.List;
 
-/**
- * Endpoints de CONSULTA consumidos pelo app mobile. Trafega apenas DTOs e
- * delega as regras ao {@link ConsultaService}. As permissoes por perfil estao
- * declaradas em {@code SecurityConfig}.
- */
 @RestController
 @RequestMapping("/api/consultas")
 public class ConsultaController {
