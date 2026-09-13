@@ -4,7 +4,7 @@ Solução 100% PaaS na Azure: aplicação Spring Boot publicada em **Azure App S
 
 **Vídeo demonstrativo:** https://youtu.be/ApngMisZKyU
 
-**Repositório:** `COLE_O_LINK_DO_GITHUB`
+**Repositório:** `https://github.com/KuraVet-Challenge-2026/java-devops.git`
 
 ---
 
@@ -36,7 +36,7 @@ A solução ataca o problema em quatro frentes:
 
 ![Arquitetura da solução](docs/arquitetura.png)
 
-O tutor acessa a aplicação por HTTPS na porta 443. O App Service executa o jar Spring Boot sobre o runtime Java 21 gerenciado pela plataforma — sem imagem de container em nenhum ponto do fluxo. A aplicação lê a connection string das variáveis de ambiente e abre conexão TLS na porta 1433 com o Banco de Dados SQL, que vive no mesmo Grupo de Recursos e na mesma região.
+O tutor acessa a aplicação por HTTPS na porta 443. O App Service executa o jar Spring Boot sobre o runtime Java 21 gerenciado pela plataforma sem imagem de container em nenhum ponto do fluxo. A aplicação lê a connection string das variáveis de ambiente e abre conexão TLS na porta 1433 com o Banco de Dados SQL, que vive no mesmo Grupo de Recursos e na mesma região.
 
 | Camada | Recurso | Nome | Configuração |
 |---|---|---|---|
@@ -91,6 +91,7 @@ A senha do administrador do banco é digitada neste momento, de forma mascarada,
 Execute na ordem:
 
 ```powershell
+.\infra\01-Variaveis.ps1        # Variaveis de ambiente
 .\infra\01-ResourceGroup.ps1    # Grupo de Recursos
 .\infra\02-AppServicePlan.ps1   # Plano do Serviço de Aplicativo (Linux B1)
 .\infra\03-WebApp.ps1           # Web App com runtime Java 21
