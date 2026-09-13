@@ -65,7 +65,7 @@ Todos os comandos são executados no terminal. Nenhuma etapa usa o portal da Azu
 ### 6.1 Clonar o repositório
 
 ```powershell
-git clone COLE_O_LINK_DO_GITHUB
+git clone https://github.com/KuraVet-Challenge-2026/java-devops.git
 cd java-devops
 ```
 
