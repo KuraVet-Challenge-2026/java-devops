@@ -50,15 +50,8 @@ Plataforma de teleconsulta e triagem veterinária da **Clyvo Vet**: o tutor usa 
 |---|---|
 | Aplicação online (portal) | https://kuravet-rm562396.azurewebsites.net/login |
 | Health check em produção | https://kuravet-rm562396.azurewebsites.net/actuator/health |
-| Repositório Java Advanced (código principal e pipeline) | https://github.com/KuraVet-Challenge-2026/java-advanced |
-| Repositório DevOps (cópia de entrega) | https://github.com/KuraVet-Challenge-2026/java-devops |
-| Vídeo Java Advanced | https://www.youtube.com/watch?v=up5OcE8ulrA `<PREENCHER: confirmar se é o vídeo de Java>` |
-| Vídeo DevOps | `<PREENCHER>` |
-| Projeto no Azure DevOps | `<PREENCHER>` |
-| Repositório de Banco de Dados | https://github.com/KuraVet-Challenge-2026/database |
-| Repositório Mobile | `<PREENCHER>` |
-| Repositório .NET | `<PREENCHER>` |
-| Repositório / evidências de QA | `<PREENCHER>` |
+| Vídeo DevOps | `https://www.youtube.com/watch?v=MmvhzjEnCKQ` |
+| Projeto no Azure DevOps | `https://dev.azure.com/KuraVet-Sprint4/` |
 
 ---
 
@@ -602,19 +595,6 @@ O resumo aparece no log do teste (o teste também roda no `./mvnw clean verify` 
 
 ---
 
-## Integração multidisciplinar
-
-| Disciplina | Como foi aplicada | Evidência |
-|---|---|---|
-| **Java Advanced** | Backend Spring Boot com portal Thymeleaf, API REST, segurança por perfil, máquina de estados e Flyway | [`kuravet/`](kuravet/) |
-| **DevOps** | Pipeline de CI/CD no Azure Pipelines, deploy em Azure Web App via Variable Group e health check, infraestrutura por scripts | [`azure-pipelines.yml`](azure-pipelines.yml), [`infra/`](infra/) |
-| **Banco de Dados** | Tabelas de apoio (V8) e packages PL/SQL com trigger de auditoria (V9) no schema do backend, entregues por migration. A trigger é exercitada pelas telas e endpoints que alteram consultas; a tela Financeiro do portal chama `PKG_KV_CARGA.PRC_CARGA_PAGAMENTO` e `PKG_KV_RELATORIO.PRC_FATURAMENTO_CLINICA_TIPO` (`SYS_REFCURSOR`) e traduz os erros `ORA-200xx` em mensagens na tela | [`V8`](kuravet/src/main/resources/db/migration/V8__banco_tabelas_apoio.sql), [`V9`](kuravet/src/main/resources/db/migration/V9__banco_packages_e_trigger.sql), [`FinanceiroProcedureRepository`](kuravet/src/main/java/br/com/fiap/kuravet/repository/procedure/FinanceiroProcedureRepository.java), [repo `database`](https://github.com/KuraVet-Challenge-2026/database) |
-| **Inteligência Artificial** | Triagem explicável: Gemini extrai sintomas, motor de regras R1–R10 decide a urgência, fallback por palavras-chave; orientação personalizada ao tutor com histórico do pet, gerada por IA com fallback por modelo fixo | [`kuravet/src/main/java/br/com/fiap/kuravet/ia/`](kuravet/src/main/java/br/com/fiap/kuravet/ia/), endpoint `POST /api/triagens` |
-| **Mobile** | O app do tutor (React Native) consome a API `/api/**` com HTTP Basic: cadastro, login, pets, consultas e triagem | `kuravet/src/main/java/br/com/fiap/kuravet/controller/api/`; repositório do app: `<PREENCHER>` |
-| **.NET** | `<PREENCHER: como a disciplina foi integrada>` | `<PREENCHER: link do repositório>` |
-| **QA** | Testes automatizados executados no CI (ver [Testes](#testes)); gestão de testes e tarefas no Azure Boards: `<PREENCHER>` | [`kuravet/src/test/`](kuravet/src/test/); Azure Boards: `<PREENCHER>` |
-
----
 
 ## Testes
 
