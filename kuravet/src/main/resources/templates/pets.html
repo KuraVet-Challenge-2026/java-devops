@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: cabeca('Pets')}"></head>
+<body>
+
+<header th:replace="~{layout :: topo('pets')}"></header>
+
+<main>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start">
+        <div>
+            <h1>Pets cadastrados</h1>
+            <p class="legenda">Todos os animais atendidos pela clínica.</p>
+        </div>
+        <a class="botao botao-principal" th:href="@{/portal/pets/novo}">Cadastrar pet</a>
+    </div>
+
+    <div th:replace="~{layout :: aviso}"></div>
+
+    <div class="quadro">
+        <table>
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Nome</th>
+                <th>Espécie</th>
+                <th>Raça</th>
+                <th>Nascimento</th>
+                <th>Sexo</th>
+                <th>Tutor</th>
+                <th>Código de identificação</th>
+                <th>Ações</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${pets}">
+                <td th:text="${p.idPet}">1</td>
+                <td th:text="${p.nome}">Nome</td>
+                <td th:text="${p.especie}">Espécie</td>
+                <td th:text="${p.raca} ?: '—'">Raça</td>
+                <td th:text="${#temporals.format(p.dataNascimento, 'dd/MM/yyyy')}">--</td>
+                <td th:text="${p.sexo != null and p.sexo.toString() == 'F'} ? 'Fêmea' : 'Macho'">Macho</td>
+                <td th:text="${p.tutor.nome}">Tutor</td>
+                <td th:text="${p.codigoIdentificacao} ?: '—'">—</td>
+                <td>
+                    <div class="acoes">
+                        <a class="botao botao-secundario"
+                           th:href="@{/portal/pets/{id}/editar(id=${p.idPet})}">Editar</a>
+                        <a class="botao botao-secundario"
+                           th:href="@{/portal/pets/{id}/triagens(id=${p.idPet})}">Histórico de triagens</a>
+                        <form th:action="@{/portal/pets/{id}/excluir(id=${p.idPet})}" method="post"
+                              onsubmit="return confirm('Excluir este pet? A ação não pode ser desfeita.');">
+                            <button type="submit" class="botao botao-perigo">Excluir</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(pets)}">
+                <td colspan="9" class="vazio">
+                    <strong>Nenhum pet cadastrado ainda.</strong>
+                    <p>Os pets cadastrados pelos tutores no aplicativo aparecem aqui.
+                        Você também pode cadastrar um pet pelo portal.</p>
+                    <a class="botao botao-principal" th:href="@{/portal/pets/novo}">Cadastrar o primeiro pet</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+</body>
+</html>

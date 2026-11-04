@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: cabeca('Painel')}"></head>
+<body>
+
+<header th:replace="~{layout :: topo('painel')}"></header>
+
+<main>
+    <h1 th:text="'Painel da Clínica KuraVet'">Painel da Clínica KuraVet</h1>
+    <p class="legenda">Visão geral das teleconsultas em cada etapa do fluxo.</p>
+
+    <div class="indicadores">
+        <a class="indicador" th:href="@{/portal/solicitacoes}">
+            <div class="numero" th:text="${totalSolicitadas}">0</div>
+            <div class="rotulo">Aguardando aprovação</div>
+        </a>
+        <a class="indicador" th:href="@{/portal/consultas(status='AGENDADA')}">
+            <div class="numero" th:text="${totalAgendadas}">0</div>
+            <div class="rotulo">Agendadas</div>
+        </a>
+        <a class="indicador" th:href="@{/portal/consultas(status='REALIZADA')}">
+            <div class="numero" th:text="${totalRealizadas}">0</div>
+            <div class="rotulo">Realizadas</div>
+        </a>
+        <a class="indicador" th:href="@{/portal/consultas(status='RECUSADA')}">
+            <div class="numero" th:text="${totalRecusadas}">0</div>
+            <div class="rotulo">Recusadas</div>
+        </a>
+        <a class="indicador" th:href="@{/portal/triagens(urgentes=true)}">
+            <div class="numero" th:text="${totalTriagensUrgentes}">0</div>
+            <div class="rotulo">Triagens urgentes (7 dias)</div>
+        </a>
+    </div>
+
+    <h2>Como funciona o fluxo</h2>
+    <div class="quadro" style="padding:20px">
+        <p style="margin:0 0 8px">
+            O tutor solicita a teleconsulta pelo aplicativo. O pedido chega aqui como
+            <span class="selo selo-SOLICITADA">SOLICITADA</span> e aguarda sua decisão.
+        </p>
+        <p style="margin:0 0 8px">
+            Ao aprovar, vira <span class="selo selo-AGENDADA">AGENDADA</span>; ao recusar,
+            <span class="selo selo-RECUSADA">RECUSADA</span> com o motivo registrado e visível ao tutor.
+        </p>
+        <p style="margin:0">
+            Depois do atendimento, o diagnóstico encerra a consulta como
+            <span class="selo selo-REALIZADA">REALIZADA</span>.
+        </p>
+    </div>
+</main>
+
+</body>
+</html>
